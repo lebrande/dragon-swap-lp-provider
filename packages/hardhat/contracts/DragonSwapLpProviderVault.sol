@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20, IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -279,6 +280,21 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
     function setTwapPeriod(uint32 _period) external onlyOwner {
         require(_period >= 60 && _period <= 86400, "PERIOD");
         twapPeriod = _period;
+    }
+
+    // -----------------------
+    // Public getters for frontend
+    // -----------------------
+    function getAssetToken() external view returns (address) {
+        return asset();
+    }
+
+    function getToken0() external view returns (address) {
+        return token0;
+    }
+
+    function getToken1() external view returns (address) {
+        return token1;
     }
 
     // -----------------------
