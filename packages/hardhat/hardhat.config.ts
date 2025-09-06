@@ -15,6 +15,8 @@ import generateTsAbis from "./scripts/generateTsAbis";
 // If not set, it uses ours Alchemy's default API key.
 // You can get your own at https://dashboard.alchemyapi.io
 const providerApiKey = process.env.ALCHEMY_API_KEY || "oKxs-03sij-U_N0iOlrSsZFr29-IqbuF";
+const seiRpcFromEnv = process.env.SEI_RPC_URL;
+const seiRpcUrl = seiRpcFromEnv || `https://sei-mainnet.g.alchemy.com/v2/${providerApiKey}`;
 // If not set, it uses the hardhat account 0 private key.
 // You can generate a random account with `yarn generate` or `yarn account:import` to import your existing PK
 const deployerPrivateKey =
@@ -49,8 +51,29 @@ const config: HardhatUserConfig = {
     // If the network you are looking for is not here you can add new network settings
     hardhat: {
       forking: {
-        url: `https://eth-mainnet.alchemyapi.io/v2/${providerApiKey}`,
-        enabled: process.env.MAINNET_FORKING_ENABLED === "true",
+        // Prefer Sei when explicitly enabled, otherwise default to ETH mainnet
+        url:
+          process.env.SEI_FORKING_ENABLED === "true"
+            ? seiRpcUrl
+            : `https://eth-mainnet.alchemyapi.io/v2/${providerApiKey}`,
+        enabled: process.env.SEI_FORKING_ENABLED === "true" || process.env.MAINNET_FORKING_ENABLED === "true",
+      },
+      chains: {
+        // Custom hardfork history for Sei EVM (chainId 1329)
+        1329: {
+          hardforkHistory: {
+            istanbul: 0,
+            muirGlacier: 0,
+            berlin: 0,
+            london: 0,
+            arrowGlacier: 0,
+            grayGlacier: 0,
+            merge: 0,
+            shanghai: 0,
+            // Disable Cancun (EIP-4844) by setting activation far in the future
+            cancun: 9999999999,
+          },
+        },
       },
     },
     mainnet: {
@@ -126,7 +149,7 @@ const config: HardhatUserConfig = {
       accounts: [deployerPrivateKey],
     },
     sei: {
-      url: `https://sei-mainnet.g.alchemy.com/v2/${providerApiKey}`,
+      url: seiRpcUrl,
       accounts: [deployerPrivateKey],
     },
   },
