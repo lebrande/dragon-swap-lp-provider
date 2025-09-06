@@ -20,7 +20,8 @@
     "lint-staged": "eslint",
     "test": "REPORT_GAS=true hardhat test --network hardhat",
     "test:sei": "SEI_FORKING_ENABLED=true hardhat test test/DragonSwapLpProviderVault.sei.fork.ts --network hardhat",
-    "verify": "hardhat etherscan-verify"
+    "verify": "hardhat etherscan-verify",
+    "automation:rebalance": "ts-node ../../automation/rebalanceVault.ts"
   },
   "dependencies": {
     "@inquirer/password": "^4.0.2",
