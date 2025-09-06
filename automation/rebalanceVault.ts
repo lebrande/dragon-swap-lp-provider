@@ -26,6 +26,7 @@ const VAULT_ABI = [
   "function modifyPositionIncrease(uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint128 liquidity, uint256 used0, uint256 used1)",
   "function modifyPositionDecrease(uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint256 amount0, uint256 amount1)",
   "function collectRewards() returns (uint256 amount0, uint256 amount1)",
+  "function swapTokensExactIn(bool zeroForOne, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96, uint256 deadline) returns (uint256 amountOut)",
 ];
 
 const POOL_ABI = [
@@ -234,9 +235,59 @@ async function main() {
 
       // 3) If no position minted yet (tokenId==0), try to create a fresh one with a conservative slice of idle balances
       if (posId === 0n && signers.manager) {
-        const use0 = bal0 / 5n; // 20%
-        const use1 = bal1 / 5n; // 20%
-        if (use0 > 0n || use1 > 0n) {
+        let use0 = bal0 / 5n; // 20%
+        let use1 = bal1 / 5n; // 20%
+
+        // If centered range and one side is zero, use owner to perform a small swap to seed the missing side
+        if (
+          (use0 === 0n || use1 === 0n) &&
+          signers.owner &&
+          (bal0 > 0n || bal1 > 0n)
+        ) {
+          try {
+            const swapPortion = 10n; // 10%
+            if (bal1 > 0n && bal0 === 0n) {
+              const amountIn = bal1 / swapPortion;
+              if (amountIn > 0n) {
+                const txSwap = await vaultRead
+                  .connect(signers.owner)
+                  .swapTokensExactIn(false, amountIn, 0, 0, now + 600); // token1 -> token0
+                await txSwap.wait();
+                console.log(
+                  `  ✓ Swapped ${formatUnits(
+                    amountIn,
+                    dec1
+                  )} ${sym1} -> ${sym0} to seed createPosition`
+                );
+              }
+            } else if (bal0 > 0n && bal1 === 0n) {
+              const amountIn = bal0 / swapPortion;
+              if (amountIn > 0n) {
+                const txSwap = await vaultRead
+                  .connect(signers.owner)
+                  .swapTokensExactIn(true, amountIn, 0, 0, now + 600); // token0 -> token1
+                await txSwap.wait();
+                console.log(
+                  `  ✓ Swapped ${formatUnits(
+                    amountIn,
+                    dec0
+                  )} ${sym0} -> ${sym1} to seed createPosition`
+                );
+              }
+            }
+          } catch (e) {
+            console.warn("  ! Seed swap failed:", (e as any)?.message || e);
+          }
+          // refresh idle balances after swap
+          const [nb0, nb1] = await Promise.all([
+            token0.balanceOf(VAULT_ADDRESS),
+            token1.balanceOf(VAULT_ADDRESS),
+          ]);
+          use0 = BigInt(nb0) / 5n;
+          use1 = BigInt(nb1) / 5n;
+        }
+
+        if (use0 > 0n && use1 > 0n) {
           try {
             const tx = await vaultRead
               .connect(signers.manager)
@@ -258,10 +309,8 @@ async function main() {
         const threshold1 = 10n ** BigInt(Math.max(0, dec1 - 2)); // ~1e-2 units of token1
         const add0 = bal0 / 10n; // 10%
         const add1 = bal1 / 10n; // 10%
-        if (
-          (add0 > threshold0 || add1 > threshold1) &&
-          (add0 > 0n || add1 > 0n)
-        ) {
+        // Prefer adding when both sides available for centered range
+        if (add0 > threshold0 && add1 > threshold1) {
           try {
             const tx = await vaultRead
               .connect(signers.manager)
