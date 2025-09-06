@@ -26,7 +26,7 @@ const VAULT_ABI = [
   "function modifyPositionIncrease(uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint128 liquidity, uint256 used0, uint256 used1)",
   "function modifyPositionDecrease(uint128 liquidity, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint256 amount0, uint256 amount1)",
   "function collectRewards() returns (uint256 amount0, uint256 amount1)",
-  "function swapTokensExactIn(bool zeroForOne, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96, uint256 deadline) returns (uint256 amountOut)",
+  "function swapTokensExactIn(bool zeroForOne, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) returns (uint256 amountOut)",
 ];
 
 const POOL_ABI = [
@@ -251,7 +251,7 @@ async function main() {
               if (amountIn > 0n) {
                 const txSwap = await vaultRead
                   .connect(signers.owner)
-                  .swapTokensExactIn(false, amountIn, 0, 0, now + 600); // token1 -> token0
+                  .swapTokensExactIn(false, amountIn, 0, 0); // token1 -> token0
                 await txSwap.wait();
                 console.log(
                   `  ✓ Swapped ${formatUnits(
@@ -265,7 +265,7 @@ async function main() {
               if (amountIn > 0n) {
                 const txSwap = await vaultRead
                   .connect(signers.owner)
-                  .swapTokensExactIn(true, amountIn, 0, 0, now + 600); // token0 -> token1
+                  .swapTokensExactIn(true, amountIn, 0, 0); // token0 -> token1
                 await txSwap.wait();
                 console.log(
                   `  ✓ Swapped ${formatUnits(
