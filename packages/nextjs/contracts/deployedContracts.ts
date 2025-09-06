@@ -5,9 +5,9 @@
 import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
 const deployedContracts = {
-  31337: {
+  1329: {
     DragonSwapLpProviderVault: {
-      address: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      address: "0x8aFA38DCBdFf84bc4f2a30d3C6248f2FC5799902",
       abi: [
         {
           inputs: [
@@ -1506,43 +1506,32 @@ const deployedContracts = {
         approve: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         asset: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         balanceOf: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        convertToAssets:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        convertToShares:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        convertToAssets: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        convertToShares: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         decimals: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         deposit: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        maxDeposit:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        maxDeposit: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         maxMint: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         maxRedeem: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        maxWithdraw:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        maxWithdraw: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         mint: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         name: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        previewDeposit:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        previewMint:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        previewRedeem:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        previewWithdraw:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        previewDeposit: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        previewMint: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        previewRedeem: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        previewWithdraw: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         redeem: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         symbol: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        totalAssets:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        totalSupply:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        totalAssets: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        totalSupply: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         transfer: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
-        transferFrom:
-          "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
+        transferFrom: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         withdraw: "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol",
         owner: "@openzeppelin/contracts/access/Ownable.sol",
         renounceOwnership: "@openzeppelin/contracts/access/Ownable.sol",
         transferOwnership: "@openzeppelin/contracts/access/Ownable.sol",
       },
-      deployedOnBlock: 1,
+      deployedOnBlock: 166614560,
     },
   },
 } as const;

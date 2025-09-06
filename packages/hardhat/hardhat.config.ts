@@ -37,7 +37,7 @@ const config: HardhatUserConfig = {
       },
     ],
   },
-  defaultNetwork: "localhost",
+  defaultNetwork: "sei",
   namedAccounts: {
     deployer: {
       // By default, it will take the first Hardhat account as the deployer
@@ -123,6 +123,10 @@ const config: HardhatUserConfig = {
     },
     celoSepolia: {
       url: "https://forno.celo-sepolia.celo-testnet.org/",
+      accounts: [deployerPrivateKey],
+    },
+    sei: {
+      url: `https://sei-mainnet.g.alchemy.com/v2/${providerApiKey}`,
       accounts: [deployerPrivateKey],
     },
   },
