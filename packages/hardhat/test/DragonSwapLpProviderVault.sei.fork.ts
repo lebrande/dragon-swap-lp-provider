@@ -1,9 +1,15 @@
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
 
-// Live deployment on Sei (chainId 1329)
-const VAULT_ADDRESS = "0xE140Bbd9e0C86d47052d1A19be4b890d8be04df8";
-// const POOL_ADDRESS = "0xe62fd4661c85e126744cc335e9bca8ae3d5d19d1"; // WBTC/USDC 0.3%
+// Addresses on Sei mainnet used for forking and on-the-fly deployment
+// Constructor args (mirroring existing Sei deployment):
+// _assetToken1 (USDC), _token0 (WBTC), _pool, _positionManager, _swapRouter, _fee, _owner
+const TOKEN1_USDC = "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392";
+const TOKEN0_WBTC = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c";
+const POOL_ADDRESS = "0xe62fd4661c85e126744cc335e9bca8ae3d5d19d1"; // WBTC/USDC 0.3%
+const POSITION_MANAGER_ADDRESS = "0xa7FDcBe645d6b2B98639EbacbC347e2B575f6F70";
+const ROUTER_ADDRESS = "0x11DA6463D6Cb5a03411Dbf5ab6f6bc3997Ac7428";
+const FEE_3000 = 3000;
 const OWNER_ADDRESS = "0xb7b1dE26B87BDE4BbF9087806542da879EBdA403"; // from deployments args
 const USDC_WHALE_ADDRESS = "0x11235534a66A33c366b84933D5202c841539D1C9";
 // Fork at deployment block + 10 to stabilize state
@@ -56,7 +62,19 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
     const [user, manager] = await ethers.getSigners();
     const owner = await impersonate(OWNER_ADDRESS);
 
-    const vault = await ethers.getContractAt("DragonSwapLpProviderVault", VAULT_ADDRESS);
+    // Deploy a fresh vault on the fork using live Sei addresses
+    const VaultFactory = await ethers.getContractFactory("DragonSwapLpProviderVault");
+    const vault = await VaultFactory.deploy(
+      TOKEN1_USDC,
+      TOKEN0_WBTC,
+      POOL_ADDRESS,
+      POSITION_MANAGER_ADDRESS,
+      ROUTER_ADDRESS,
+      FEE_3000,
+      OWNER_ADDRESS,
+    );
+    await vault.waitForDeployment();
+    const VAULT_ADDRESS = await vault.getAddress();
 
     const token0Addr: string = await vault.token0();
     const token1Addr: string = await vault.token1();
