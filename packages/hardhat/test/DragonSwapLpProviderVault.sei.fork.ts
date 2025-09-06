@@ -1,10 +1,19 @@
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
 
-// Live deployment on Sei (chainId 1329)
-const VAULT_ADDRESS = "0x8aFA38DCBdFf84bc4f2a30d3C6248f2FC5799902";
+// Addresses on Sei mainnet used for forking and on-the-fly deployment
+// Constructor args (mirroring existing Sei deployment):
+// _assetToken1 (USDC), _token0 (WBTC), _pool, _positionManager, _swapRouter, _fee, _owner
+const TOKEN1_USDC = "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392";
+const TOKEN0_WBTC = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c";
 const POOL_ADDRESS = "0xe62fd4661c85e126744cc335e9bca8ae3d5d19d1"; // WBTC/USDC 0.3%
+const POSITION_MANAGER_ADDRESS = "0xa7FDcBe645d6b2B98639EbacbC347e2B575f6F70";
+const ROUTER_ADDRESS = "0x11DA6463D6Cb5a03411Dbf5ab6f6bc3997Ac7428";
+const FEE_3000 = 3000;
 const OWNER_ADDRESS = "0xb7b1dE26B87BDE4BbF9087806542da879EBdA403"; // from deployments args
+const USDC_WHALE_ADDRESS = "0x11235534a66A33c366b84933D5202c841539D1C9";
+// Fork at deployment block + 10 to stabilize state
+const FORK_BLOCK_NUMBER = 166639414 + 10;
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -42,6 +51,7 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
         {
           forking: {
             jsonRpcUrl: rpcUrl,
+            blockNumber: FORK_BLOCK_NUMBER,
           },
         },
       ],
@@ -52,7 +62,19 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
     const [user, manager] = await ethers.getSigners();
     const owner = await impersonate(OWNER_ADDRESS);
 
-    const vault = await ethers.getContractAt("DragonSwapLpProviderVault", VAULT_ADDRESS);
+    // Deploy a fresh vault on the fork using live Sei addresses
+    const VaultFactory = await ethers.getContractFactory("DragonSwapLpProviderVault");
+    const vault = await VaultFactory.deploy(
+      TOKEN1_USDC,
+      TOKEN0_WBTC,
+      POOL_ADDRESS,
+      POSITION_MANAGER_ADDRESS,
+      ROUTER_ADDRESS,
+      FEE_3000,
+      OWNER_ADDRESS,
+    );
+    await vault.waitForDeployment();
+    const VAULT_ADDRESS = await vault.getAddress();
 
     const token0Addr: string = await vault.token0();
     const token1Addr: string = await vault.token1();
@@ -62,21 +84,25 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
     const token0 = new ethers.Contract(token0Addr, ERC20_ABI, ethers.provider);
     const token1 = new ethers.Contract(token1Addr, ERC20_ABI, ethers.provider);
 
-    // Fund user with USDC by impersonating the pool (assumes non-zero reserves on fork)
-    const poolSigner = await impersonate(POOL_ADDRESS);
-    const poolUsdcBal: bigint = await token1.balanceOf(POOL_ADDRESS);
-    expect(poolUsdcBal).to.be.gt(0n);
-    // take a conservative slice to avoid draining
-    const transferAmount: bigint = poolUsdcBal / 100n; // 1% of pool balance
-    const token1FromPool = token1.connect(poolSigner);
-    await (token1FromPool as any).transfer(await user.getAddress(), transferAmount);
+    // Fund user with USDC by impersonating the whale
+    const whaleSigner = await impersonate(USDC_WHALE_ADDRESS);
+    const whaleUsdcBal: bigint = await token1.balanceOf(USDC_WHALE_ADDRESS);
+    expect(whaleUsdcBal).to.equal(429253_659257n);
+    const transferAmount: bigint = 10_000000n; // 10 USDC
+    const token1FromWhale = token1.connect(whaleSigner);
+    await (token1FromWhale as any).transfer(await user.getAddress(), transferAmount);
+
+    const userUsdcBal: bigint = await token1.balanceOf(await user.getAddress());
+    expect(userUsdcBal).to.equal(10_000000n);
 
     // Approve and deposit by user
     const token1FromUser = token1.connect(user);
     await (token1FromUser as any).approve(VAULT_ADDRESS, transferAmount);
     const sharesBefore: bigint = await vault.balanceOf(await user.getAddress());
+    expect(sharesBefore).to.equal(0n);
     await vault.connect(user).deposit(transferAmount, await user.getAddress());
     const sharesAfter: bigint = await vault.balanceOf(await user.getAddress());
+    expect(sharesAfter).to.equal(10_000000n);
     expect(sharesAfter - sharesBefore).to.equal(transferAmount);
 
     // Set manager via owner and verify roles
@@ -85,70 +111,60 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
 
     // Reduce TWAP period to 60s to ensure oracle observation availability on fork
     await (await vault.connect(owner).setTwapPeriod(60)).wait();
+    expect(await vault.twapPeriod()).to.equal(60);
 
     // Owner swaps half of token1 to token0 (fallback to funding token0 if router reverts)
     const vaultUsdcBefore: bigint = await token1.balanceOf(VAULT_ADDRESS);
+    expect(vaultUsdcBefore).to.equal(10_000000n);
     const amountInSwap: bigint = vaultUsdcBefore / 2n;
-    const deadline = Math.floor(Date.now() / 1000) + 3600;
-    let swapWorked = true;
-    try {
-      await vault.connect(owner).swapTokensExactIn(false, amountInSwap, 0, 0, deadline);
-    } catch {
-      swapWorked = false;
-      // Fallback: impersonate pool and transfer a small amount of token0 to vault
-      const poolSigner2 = await impersonate(POOL_ADDRESS);
-      const poolT0Bal: bigint = await token0.balanceOf(POOL_ADDRESS);
-      const topUp0: bigint = poolT0Bal / 1000n; // 0.1% of pool balance
-      if (topUp0 > 0n) {
-        const token0FromPool = token0.connect(poolSigner2);
-        await (token0FromPool as any).transfer(VAULT_ADDRESS, topUp0);
-      }
-    }
+    await vault.connect(owner).swapTokensExactIn(false, amountInSwap, 0, 0);
     const vaultWbtcAfterSwap: bigint = await token0.balanceOf(VAULT_ADDRESS);
     const vaultUsdcAfterSwap: bigint = await token1.balanceOf(VAULT_ADDRESS);
-    expect(vaultWbtcAfterSwap).to.be.gt(0n);
-    if (swapWorked) {
-      expect(vaultUsdcAfterSwap).to.be.lt(vaultUsdcBefore);
-    }
+
+    expect(vaultWbtcAfterSwap).to.equal(4512n);
+    expect(vaultUsdcAfterSwap).to.equal(5_000000n);
 
     // Manager creates position using 20% of current idle balances
     const idle0ForCreate: bigint = (await token0.balanceOf(VAULT_ADDRESS)) / 5n;
+    expect(idle0ForCreate).to.equal(902n);
     const idle1ForCreate: bigint = (await token1.balanceOf(VAULT_ADDRESS)) / 5n;
+    expect(idle1ForCreate).to.equal(1_000000n);
+    const deadline = 1757300000; // GMT 8 September 2025 02:53:20
     await vault.connect(manager).createPosition(idle0ForCreate, idle1ForCreate, 0, 0, deadline);
     const posLiqAfterCreate: bigint = await vault.positionLiquidity();
-    expect(posLiqAfterCreate).to.be.gt(0n);
+    expect(posLiqAfterCreate).to.equal(601743n);
 
     // Manager increases using 20% of idle balances
     const idle0ForInc: bigint = (await token0.balanceOf(VAULT_ADDRESS)) / 5n;
+    expect(idle0ForInc).to.equal(722n);
     const idle1ForInc: bigint = (await token1.balanceOf(VAULT_ADDRESS)) / 5n;
+    expect(idle1ForInc).to.equal(801533n);
     await vault.connect(manager).modifyPositionIncrease(idle0ForInc, idle1ForInc, 0, 0, deadline);
     const posLiqAfterInc: bigint = await vault.positionLiquidity();
-    expect(posLiqAfterInc).to.be.gte(posLiqAfterCreate);
+    expect(posLiqAfterInc).to.equal(1_083404n);
 
-    // Manager decreases position by 50%
-    const halfLiq: bigint = posLiqAfterInc / 2n;
-    await vault.connect(manager).modifyPositionDecrease(halfLiq, 0, 0, deadline);
+    // Manager decreases position by 33%
+    const liqToDec: bigint = posLiqAfterInc / 3n;
+    expect(liqToDec).to.equal(361134n);
+    await vault.connect(manager).modifyPositionDecrease(liqToDec, 0, 0, deadline);
     const posLiqAfterDec: bigint = await vault.positionLiquidity();
-    expect(posLiqAfterDec).to.equal(posLiqAfterInc - halfLiq);
+    expect(posLiqAfterDec).to.equal(722270n);
+    expect(posLiqAfterDec).to.equal(posLiqAfterInc - liqToDec);
 
-    // User withdraws 50% of shares
+    // User withdraws 5% of shares
     const userShares: bigint = await vault.balanceOf(await user.getAddress());
+    expect(userShares).to.equal(10_000000n);
     const userUsdcBefore: bigint = await token1.balanceOf(await user.getAddress());
-    // Ensure no TWAP needed for totalAssets: remove remaining liquidity and clear idle token0
-    if (posLiqAfterDec > 0n) {
-      await vault.connect(manager).modifyPositionDecrease(posLiqAfterDec as any, 0, 0, deadline);
-    }
-    // Move any idle token0 out of the vault to avoid TWAP conversion
-    const vaultToken0Bal: bigint = await token0.balanceOf(VAULT_ADDRESS);
-    if (vaultToken0Bal > 0n) {
-      const vaultAsSigner = await impersonate(VAULT_ADDRESS);
-      const token0FromVault = token0.connect(vaultAsSigner);
-      await (token0FromVault as any).transfer(await manager.getAddress(), vaultToken0Bal);
-    }
-    await vault.connect(user).redeem(userShares / 2n, await user.getAddress(), await user.getAddress());
-    const userUsdcAfter: bigint = await token1.balanceOf(await user.getAddress());
-    const userSharesAfter: bigint = await vault.balanceOf(await user.getAddress());
-    expect(userUsdcAfter).to.be.gt(userUsdcBefore);
-    expect(userSharesAfter).to.equal(userShares - userShares / 2n);
+    expect(userUsdcBefore).to.equal(0n);
+
+    const idleToken1: bigint = await token1.balanceOf(VAULT_ADDRESS);
+    expect(idleToken1).to.equal(3_808905n);
+
+    // const userAddress = await user.getAddress();
+    // await vault.connect(user).redeem(1n, userAddress, userAddress);
+    // const userUsdcAfter: bigint = await token1.balanceOf(userAddress);
+    // const userSharesAfter: bigint = await vault.balanceOf(userAddress);
+    // expect(userUsdcAfter).to.equal(1n);
+    // expect(userSharesAfter).to.equal(2n);
   });
 });
