@@ -160,11 +160,13 @@ describe("DragonSwapLpProviderVault - Sei fork lifecycle", function () {
     const idleToken1: bigint = await token1.balanceOf(VAULT_ADDRESS);
     expect(idleToken1).to.equal(3_808905n);
 
-    // const userAddress = await user.getAddress();
-    // await vault.connect(user).redeem(1n, userAddress, userAddress);
-    // const userUsdcAfter: bigint = await token1.balanceOf(userAddress);
-    // const userSharesAfter: bigint = await vault.balanceOf(userAddress);
-    // expect(userUsdcAfter).to.equal(1n);
-    // expect(userSharesAfter).to.equal(2n);
+    const sharesToRedeem: bigint = userShares / 20n;
+
+    const userAddress = await user.getAddress();
+    await vault.connect(user).redeem(sharesToRedeem, userAddress, userAddress);
+    const userUsdcAfter: bigint = await token1.balanceOf(userAddress);
+    const userSharesAfter: bigint = await vault.balanceOf(userAddress);
+    expect(userSharesAfter).to.equal(userShares - sharesToRedeem);
+    expect(userUsdcAfter).to.equal(1n);
   });
 });

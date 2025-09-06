@@ -107,11 +107,11 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
             );
         }
 
-        // Convert everything to token1 using TWAP price only if needed
+        // Convert everything to token1 using spot price only if needed
         uint256 idle0In1;
         uint256 pos0In1;
         if (idle0 > 0 || pos0 > 0) {
-            uint256 priceX96 = _twapToken0PerToken1X96(); // Q96
+            uint256 priceX96 = _twapToken0PerToken1X96(); // Q96 (USES SPOT PRICE!)
             idle0In1 = (idle0 * priceX96) >> 96;
             pos0In1 = (pos0 * priceX96) >> 96;
         }
@@ -292,16 +292,9 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
         return ceiled;
     }
 
-    // returns Q96 price of token0 denominated in token1 based on TWAP tick
+    // returns Q96 price of token0 denominated in token1 based on current spot price
     function _twapToken0PerToken1X96() internal view returns (uint256 priceX96) {
-        uint32[] memory secondsAgos = new uint32[](2);
-        secondsAgos[0] = twapPeriod;
-        secondsAgos[1] = 0;
-        (int56[] memory tickCumulatives, ) = pool.observe(secondsAgos);
-        int56 delta = tickCumulatives[1] - tickCumulatives[0];
-        int24 avgTick = int24(delta / int56(uint56(twapPeriod)));
-        if (delta < 0 && (delta % int56(uint56(twapPeriod)) != 0)) avgTick--;
-        uint160 sqrtPriceX96 = TickMathLib.getSqrtRatioAtTick(avgTick);
+        (uint160 sqrtPriceX96,, , , , , ) = pool.slot0();
         // price0 per 1 = (sqrtP^2 / 2^192)
         uint256 ratioX192 = uint256(sqrtPriceX96) * uint256(sqrtPriceX96);
         priceX96 = ratioX192 >> 96; // Q96
