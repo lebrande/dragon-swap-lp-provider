@@ -58,7 +58,7 @@ describe("DragonSwapLpProviderVault - ERC4626 core and access control", function
     const { user, token1, vault } = await deployFixture();
     await token1.mint(await user.getAddress(), 1_000_000n);
     await token1.connect(user).approve(await vault.getAddress(), 1_000_000n);
-    const shares = await vault.connect(user).deposit(500_000n, await user.getAddress());
+    // const shares = await vault.connect(user).deposit(500_000n, await user.getAddress());
     expect(await vault.balanceOf(await user.getAddress())).to.eq(500_000n);
     expect(await vault.totalAssets()).to.eq(500_000n);
   });
@@ -82,7 +82,7 @@ describe("DragonSwapLpProviderVault - ERC4626 core and access control", function
     await expect(vault.connect(user).modifyPositionIncrease(0, 0, 0, 0, 0)).to.be.revertedWith("MANAGER");
     await expect(vault.connect(user).modifyPositionDecrease(0, 0, 0, 0)).to.be.revertedWith("MANAGER");
     await expect(vault.connect(user).collectRewards()).to.be.revertedWith("MANAGER");
-    await expect(vault.connect(user).swapTokensExactIn(true, 0, 0, 0, 0)).to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
+    await expect(vault.connect(user).swapTokensExactIn(true, 0, 0, 0)).to.be.revertedWithCustomError(vault, "OwnableUnauthorizedAccount");
   });
 });
 

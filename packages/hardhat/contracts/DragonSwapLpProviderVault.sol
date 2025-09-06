@@ -77,7 +77,6 @@ interface IDragonSwapRouter {
         address tokenOut;
         uint24 fee;
         address recipient;
-        uint256 deadline;
         uint256 amountIn;
         uint256 amountOutMinimum;
         uint160 sqrtPriceLimitX96;
@@ -88,7 +87,6 @@ interface IDragonSwapRouter {
         address tokenOut;
         uint24 fee;
         address recipient;
-        uint256 deadline;
         uint256 amountOut;
         uint256 amountInMaximum;
         uint160 sqrtPriceLimitX96;
@@ -444,7 +442,7 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
     // -----------------------
     // Owner operations: swaps
     // -----------------------
-    function swapTokensExactIn(bool zeroForOne, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96, uint256 deadline)
+    function swapTokensExactIn(bool zeroForOne, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)
         external
         onlyOwner
         nonReentrant
@@ -458,7 +456,6 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
             tokenOut: tokenOut,
             fee: fee,
             recipient: address(this),
-            deadline: deadline,
             amountIn: amountIn,
             amountOutMinimum: amountOutMinimum,
             sqrtPriceLimitX96: sqrtPriceLimitX96
@@ -550,7 +547,6 @@ contract DragonSwapLpProviderVault is ERC4626, Ownable, ReentrancyGuard {
                     tokenOut: token1,
                     fee: fee,
                     recipient: address(this),
-                    deadline: block.timestamp,
                     amountIn: bal0,
                     amountOutMinimum: 0,
                     sqrtPriceLimitX96: 0
