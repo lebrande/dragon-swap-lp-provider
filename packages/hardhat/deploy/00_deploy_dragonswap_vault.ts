@@ -2,6 +2,7 @@ import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 // SEI mainnet chainId 1329 DragonSwap V3-compatible addresses (from docs)
+// https://docs.dragonswap.app/dragonswap/faq/contract-addresses/dragonswapv2
 const DRAGON_ADDRESSES = {
   NonfungiblePositionManager: "0xa7FDcBe645d6b2B98639EbacbC347e2B575f6F70",
   SwapRouter02: "0x11DA6463D6Cb5a03411Dbf5ab6f6bc3997Ac7428",
@@ -11,9 +12,9 @@ const DRAGON_ADDRESSES = {
 
 const POOL = {
   address: "0xe62fd4661c85e126744cc335e9bca8ae3d5d19d1",
-  token0: "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
-  token1: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
-  fee: 3000,
+  token0: "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c", // WBTC
+  token1: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392", // USDC
+  fee: 3000, // 0.3%
 };
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
@@ -29,7 +30,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const deployment = await deploy("DragonSwapLpProviderVault", {
     from: deployer,
     args: [
-      POOL.token1, // asset token1
+      POOL.token1, // that's also underlying asset of the vault
       POOL.token0,
       POOL.address,
       DRAGON_ADDRESSES.NonfungiblePositionManager,
@@ -49,4 +50,3 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
 export default func;
 func.tags = ["DragonVault"];
-
