@@ -20,6 +20,7 @@
     "lint-staged": "eslint",
     "test": "REPORT_GAS=true hardhat test --network hardhat",
     "test:sei": "SEI_FORKING_ENABLED=true hardhat test test/DragonSwapLpProviderVault.sei.fork.ts --network hardhat",
+    "test:sei:router": "SEI_FORKING_ENABLED=true hardhat test test/DragonSwapRouter.sei.fork.ts --network hardhat",
     "verify": "hardhat etherscan-verify"
   },
   "dependencies": {
