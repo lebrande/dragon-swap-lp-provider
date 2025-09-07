@@ -1,4 +1,4 @@
-# How `automation/rebalanceVault.ts` works
+# How `packages\automation\rebalanceVault.ts` works
 
 - Starts a monitoring loop for `DragonSwapLpProviderVault` on SEI (chainId 1329).
 - Every `AUTOMATION_INTERVAL_MS` it reads: `slot0` (tick, sqrtPrice), position range, token balances, `totalSupply`, `totalAssets`, and an approximate `pricePerShare` (skipping potential TWAP "OLD" revert).
@@ -27,4 +27,4 @@ Required environment variables:
 
 Run:
 
-`npx tsx .\automation\rebalanceVault.ts`
+`npx tsx .\packages\automation\rebalanceVault.ts`
