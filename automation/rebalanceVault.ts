@@ -7,7 +7,7 @@ import {
   getAddress,
 } from "ethers";
 
-const DEFAULT_INTERVAL_MS = 10_000;
+const DEFAULT_INTERVAL_MS = 1_000;
 
 // Minimal ABIs extracted from the contract and tests
 const VAULT_ABI = [
@@ -21,6 +21,11 @@ const VAULT_ABI = [
   "function positionLiquidity() view returns (uint128)",
   "function positionTickLower() view returns (int24)",
   "function positionTickUpper() view returns (int24)",
+  "function totalSupply() view returns (uint256)",
+  "function totalAssets() view returns (uint256)",
+  "function convertToAssets(uint256 shares) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function balanceOf(address) view returns (uint256)",
   "function setManager(address _manager)",
   "function createPosition(uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint256 tokenId, uint128 liquidity)",
   "function modifyPositionIncrease(uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, uint256 deadline) returns (uint128 liquidity, uint256 used0, uint256 used1)",
@@ -79,7 +84,7 @@ async function ensureRoles(vault: Contract, signers: Signers) {
 
 async function main() {
   const VAULT_ADDRESS = (
-    process.env.VAULT_ADDRESS || "0x8aFA38DCBdFf84bc4f2a30d3C6248f2FC5799902"
+    process.env.VAULT_ADDRESS || "0x88B2652132b618338232121Df93F609D1Dcbea36"
   ).trim();
   const RPC_URL = requireEnv("SEI_RPC_URL");
   const INTERVAL_MS = Number(
@@ -96,6 +101,7 @@ async function main() {
 
   // Use provider-backed contract for reads; connect signer only for writes
   const vaultRead = new Contract(VAULT_ADDRESS, VAULT_ABI, provider);
+  const vaultAny = vaultRead as any;
 
   const envPool = process.env.POOL_ADDRESS?.trim();
   const poolAddr: string =
@@ -121,6 +127,8 @@ async function main() {
   ]);
   const dec0 = Number(dec0Raw);
   const dec1 = Number(dec1Raw);
+  const sharesDecimalsRaw: bigint = await vaultRead.decimals();
+  const sharesDec = Number(sharesDecimalsRaw);
 
   console.log("Automation started");
   console.log(`- Network: SEI (chainId 1329)`);
@@ -148,7 +156,7 @@ async function main() {
       signers.owner.address;
     try {
       if (getAddress(onchainManager) !== getAddress(desiredManager)) {
-        const tx = await vaultRead
+        const tx = await vaultAny
           .connect(signers.owner)
           .setManager(desiredManager);
         await tx.wait();
@@ -206,10 +214,71 @@ async function main() {
         )} ${sym1}; liq=${liq}`
       );
 
+      // Vault shares/price (robust against TWAP 'OLD' reverts)
+      let totalAssetsBi: bigint | null = null;
+      let totalSupplyBi: bigint | null = null;
+      try {
+        totalSupplyBi = await vaultRead.totalSupply();
+      } catch {}
+      try {
+        // totalAssets() may revert with reason "OLD" if pool's oracle observations are too short for twapPeriod
+        totalAssetsBi = await vaultRead.totalAssets();
+      } catch (e) {
+        console.warn(
+          "  ! totalAssets read failed (likely TWAP/OLD). Skipping PPS for now:",
+          (e as any)?.reason || (e as any)?.message || e
+        );
+      }
+      const oneShare = 10n ** BigInt(sharesDec);
+      let assetsPerShareBi: bigint | null = null;
+      if (
+        totalSupplyBi != null &&
+        totalSupplyBi > 0n &&
+        totalAssetsBi != null
+      ) {
+        // Avoid convertToAssets() to bypass potential TWAP revert path
+        assetsPerShareBi = (totalAssetsBi * oneShare) / totalSupplyBi;
+      }
+      const taStr =
+        totalAssetsBi != null ? formatUnits(totalAssetsBi, dec1) : "n/a";
+      const tsStr =
+        totalSupplyBi != null ? formatUnits(totalSupplyBi, sharesDec) : "n/a";
+      const ppsStr =
+        assetsPerShareBi != null ? formatUnits(assetsPerShareBi, dec1) : "n/a";
+      console.log(
+        `  vault: totalAssets=${taStr} ${sym1}, totalSupply=${tsStr} shares, pricePerShare≈${ppsStr} ${sym1}`
+      );
+
+      // Optional: watch specific addresses' share balances
+      const watch = process.env.WATCH_ADDRESSES?.trim();
+      if (watch) {
+        for (const raw of watch.split(",")) {
+          const addr = raw.trim();
+          if (addr.length === 0) continue;
+          try {
+            const balShares: bigint = await vaultRead.balanceOf(addr);
+            let balAssets: bigint = 0n;
+            if (balShares > 0n) {
+              try {
+                balAssets = await vaultRead.convertToAssets(balShares);
+              } catch {
+                // Same TWAP 'OLD' risk via totalAssets(); skip if it fails
+              }
+            }
+            console.log(
+              `  watch ${addr}: shares=${formatUnits(
+                balShares,
+                sharesDec
+              )}, assets≈${formatUnits(balAssets, dec1)} ${sym1}`
+            );
+          } catch {}
+        }
+      }
+
       // 1) Periodically collect rewards if any position exists
       if (posId !== 0n && signers.manager) {
         try {
-          const tx = await vaultRead.connect(signers.manager).collectRewards();
+          const tx = await vaultAny.connect(signers.manager).collectRewards();
           await tx.wait();
           console.log("  ✓ Rewards collected");
         } catch (e) {
@@ -220,7 +289,7 @@ async function main() {
       // 2) If out-of-range and there is liquidity, unload to idle to avoid IL
       if (!inRange && liq > 0n && signers.manager) {
         try {
-          const tx = await vaultRead
+          const tx = await vaultAny
             .connect(signers.manager)
             .modifyPositionDecrease(liq, 0, 0, now + 600);
           await tx.wait();
@@ -249,7 +318,7 @@ async function main() {
             if (bal1 > 0n && bal0 === 0n) {
               const amountIn = bal1 / swapPortion;
               if (amountIn > 0n) {
-                const txSwap = await vaultRead
+                const txSwap = await vaultAny
                   .connect(signers.owner)
                   .swapTokensExactIn(false, amountIn, 0, 0); // token1 -> token0
                 await txSwap.wait();
@@ -263,7 +332,7 @@ async function main() {
             } else if (bal0 > 0n && bal1 === 0n) {
               const amountIn = bal0 / swapPortion;
               if (amountIn > 0n) {
-                const txSwap = await vaultRead
+                const txSwap = await vaultAny
                   .connect(signers.owner)
                   .swapTokensExactIn(true, amountIn, 0, 0); // token0 -> token1
                 await txSwap.wait();
@@ -289,7 +358,7 @@ async function main() {
 
         if (use0 > 0n && use1 > 0n) {
           try {
-            const tx = await vaultRead
+            const tx = await vaultAny
               .connect(signers.manager)
               .createPosition(use0, use1, 0, 0, now + 600);
             await tx.wait();
@@ -312,7 +381,7 @@ async function main() {
         // Prefer adding when both sides available for centered range
         if (add0 > threshold0 && add1 > threshold1) {
           try {
-            const tx = await vaultRead
+            const tx = await vaultAny
               .connect(signers.manager)
               .modifyPositionIncrease(add0, add1, 0, 0, now + 600);
             await tx.wait();
